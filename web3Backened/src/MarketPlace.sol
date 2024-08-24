@@ -27,9 +27,9 @@ contract FreelanceMarketplace {
     uint256 public bidCount;
     uint256 public orderCount;
 
-    mapping(uint256 => Job) public jobs;
-    mapping(uint256 => Bid) public bids;
-    mapping(uint256 => Order) public orders;
+    mapping(uint256 => Job) public jobs; // jobId to job details
+    mapping(uint256 => Bid) public bids; // bidId to bid details
+    mapping(uint256 => Order) public orders; // orderId to order details
 
     event JobPosted(
         uint256 jobId,
@@ -37,6 +37,7 @@ contract FreelanceMarketplace {
         string description,
         uint256 budget
     );
+
     event BidPlaced(
         uint256 bidId,
         uint256 jobId,
@@ -48,7 +49,15 @@ contract FreelanceMarketplace {
     event PaymentReleased(uint256 orderId, uint256 amount);
 
     // Client posts a job
-    function postJob(string memory description, uint256 budget) external {
+    function postJob(
+        string memory description,
+        uint256 budget
+    ) external payable {
+        require(
+            msg.value >= budget,
+            "You need to send the exact budget in ETH!"
+        );
+
         jobs[jobCount] = Job({
             client: msg.sender,
             description: description,
@@ -56,7 +65,7 @@ contract FreelanceMarketplace {
             active: true
         });
 
-        emit JobPosted(jobCount, msg.sender, description, budget); // Emitting an event to notify the client that the job has been posted
+        emit JobPosted(jobCount, msg.sender, description, budget);
         jobCount++;
     }
 
@@ -72,6 +81,23 @@ contract FreelanceMarketplace {
 
         emit BidPlaced(bidCount, jobId, msg.sender, amount);
         bidCount++;
+    }
+
+    function directPlaceOrder(uint256 jobId, uint256 amount) external payable {
+        Job storage job = jobs[jobId];
+        require(job.active, "Job is not active");
+
+        orders[orderCount] = Order({
+            client: job.client,
+            freelancer: msg.sender,
+            amount: amount,
+            completed: false,
+            paid: false
+        });
+
+        job.active = false;
+        emit JobCompleted(orderCount);
+        orderCount++;
     }
 
     // Client accepts a bid
@@ -100,7 +126,6 @@ contract FreelanceMarketplace {
         orderCount++;
     }
 
-    // Freelancer marks job as completed
     function completeJob(
         uint256 orderId
     ) external orderExists(orderId) onlyFreelancer(orderId) {
@@ -111,19 +136,18 @@ contract FreelanceMarketplace {
         emit JobCompleted(orderId);
     }
 
-    // Client releases payment to freelancer
     function releasePayment(
         uint256 orderId
-    ) external payable orderExists(orderId) onlyOrderClient(orderId) {
+    ) external orderExists(orderId) onlyOrderClient(orderId) {
         Order storage order = orders[orderId];
         require(order.completed, "Job is not completed");
         require(!order.paid, "Payment already released");
-        require(msg.value == order.amount, "Incorrect payment amount");
-
         order.paid = true;
-        payable(order.freelancer).transfer(msg.value);
-
-        emit PaymentReleased(orderId, msg.value);
+        (bool callSuccess, ) = payable(msg.sender).call{value: order.amount}( // solhint-disable-line avoid-low-level-calls // solhint-disable-line reentrancy
+            ""
+        );
+        require(callSuccess, "Call failed");
+        emit PaymentReleased(orderId, order.amount);
     }
 
     modifier jobExists(uint256 jobId) {
