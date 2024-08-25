@@ -1,12 +1,19 @@
-import React, { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import React, { useEffect, useState, useRef } from "react";  // Added useRef here
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import "./Navbar.scss";
+import LoginPopUp from "../LoginPopUp/LoginPopUp";
 
-function Navbar() {
+const Navbar = () => {
   const [active, setActive] = useState(false);
   const [open, setOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
 
   const { pathname } = useLocation();
+  const navigate = useNavigate(); 
+
+  const userDropdownRef = useRef(null);  // Initialized useRef
 
   const isActive = () => {
     window.scrollY > 0 ? setActive(true) : setActive(false);
@@ -19,12 +26,29 @@ function Navbar() {
     };
   }, []);
 
-  // const currentUser = null
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
 
-  const currentUser = {
-    id: 1,
-    username: "Zaid",
-    isSeller: true,
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const handleLogin = (userDetails) => {
+    setCurrentUser(userDetails);  
+    setIsLoggedIn(true);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setIsLoggedIn(false);
+    setOpen(false);
+    navigate("/");
   };
 
   return (
@@ -35,50 +59,41 @@ function Navbar() {
             <span>ProLancer</span>
           </Link>
         </div>
+
         <div className="links">
           <span>ProLancer Business</span>
           <span>Explore</span>
           <span>English</span>
-          {!currentUser?.isSeller && <span>Become a Seller</span>}
-          {currentUser ? (
-            <div className="user" onClick={()=>setOpen(!open)}>
-              <img
-                src="/img/man.png"
-                alt=""
-              />
-              <span>{currentUser?.username}</span>
-              {open && <div className="options">
-                {currentUser.isSeller && (
-                  <>
-                    <Link className="link" to="/mygigs">
-                      Gigs
-                    </Link>
-                    <Link className="link" to="/add">
-                      Add New Gig
-                    </Link>
-                  </>
-                )}
-                <Link className="link" to="/orders">
-                  Orders
-                </Link>
-                <Link className="link" to="/messages">
-                  Messages
-                </Link>
-                <Link className="link" to="/login">
-                  Logout
-                </Link>
-              </div>}
-            </div>
+          <span>Become a Seller</span>
+          {!isLoggedIn ? (
+            <button className="signinbutton" onClick={() => setShowLogin(true)}>
+              Sign in
+            </button>
           ) : (
-            <>
-              <span>Sign in</span>
-              <Link className="link" to="/register">
-                <button>Join</button>
-              </Link>
-            </>
+            <div className="user" ref={userDropdownRef} onClick={() => setOpen(!open)}>
+              <img src="/img/man.png" alt="" />
+              <span>{currentUser?.name}</span>
+              {open && (
+                <div className="options">
+                  <Link className="link" to="/dashboard">
+                    Dashboard
+                  </Link>
+                  <Link className="link" to="/orders">
+                    Orders
+                  </Link>
+                  <Link className="link" to="/messages">
+                    Messages
+                  </Link>
+                  <span className="link" onClick={handleLogout}>
+                    Logout
+                  </span>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
+
       {(active || pathname !== "/") && (
         <>
           <hr />
@@ -114,8 +129,10 @@ function Navbar() {
           <hr />
         </>
       )}
+
+      {showLogin && <LoginPopUp setShowLogin={setShowLogin} handleLogin={handleLogin} />}
     </div>
   );
-}
+};
 
 export default Navbar;
